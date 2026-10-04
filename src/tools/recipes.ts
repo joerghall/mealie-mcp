@@ -248,7 +248,8 @@ export function registerRecipeReadTools(
       title: 'Get recipe',
       description:
         'Fetches one recipe with everything needed to cook it: ingredients, ' +
-        'steps, times, yield, notes and nutrition. Accepts the slug or the UUID.',
+        'steps, times, yield, scaling basis and base dimensions, notes and ' +
+        'nutrition. Accepts the slug or the UUID.',
       inputSchema: z.object({
         recipe: recipeRefParam,
         detail: z
@@ -458,6 +459,35 @@ const recipeFields = {
   total_time: z.string().max(100).optional(),
   servings: z.number().min(0).max(10_000).optional(),
   recipe_yield: z.string().max(255).optional(),
+  scale_basis: z
+    .enum(['servings', 'round', 'square', 'rectangle'])
+    .optional()
+    .describe(
+      'How ingredient quantities scale: servings is linear; round, square ' +
+        'and rectangle scale by area. A dimensional basis requires positive ' +
+        'base dimensions in the same create or update request unless they ' +
+        'already exist on the recipe.'
+    ),
+  scale_unit: z
+    .enum(['in', 'cm'])
+    .optional()
+    .describe('Unit for the recipe base dimensions: inches or centimeters.'),
+  scale_base_length: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      'Original diameter for round, side length for square, or length for ' +
+        'rectangle. Must be greater than zero for dimensional scaling.'
+    ),
+  scale_base_width: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      'Original rectangle width. Must be greater than zero when scale_basis ' +
+        'is rectangle; leave zero or omit it for the other bases.'
+    ),
   notes: z
     .array(
       z.object({
@@ -486,7 +516,7 @@ const recipeFields = {
  * Everything else `update_recipe` accepts is a measurement or a setting —
  * times, servings, yield, the source link. Losing "15 min" is not the same as
  * losing a page of instructions, and the line drawn in `annotations.ts` is the
- * line drawn here.
+ * line drawn here. Scaling fields are measurements and settings too.
  */
 const REPLACED_RECIPE_CONTENT = [
   'name',
@@ -578,7 +608,8 @@ export function registerRecipeWriteTools(
         'Replacing written content — name, description, ingredients, ' +
         'instructions, tags, categories or notes — requires confirmation: call ' +
         'once to receive a token, then again with that token. Changing only ' +
-        'times, servings, yield or the source link does not.',
+        'times, servings, yield, scaling basis, scaling dimensions or the ' +
+        'source link does not.',
       inputSchema: z.object({
         recipe: recipeRefParam,
         name: z.string().trim().min(1).max(255).optional(),
@@ -854,6 +885,10 @@ export function recipePatch(fields: {
   total_time?: string | undefined;
   servings?: number | undefined;
   recipe_yield?: string | undefined;
+  scale_basis?: 'servings' | 'round' | 'square' | 'rectangle' | undefined;
+  scale_unit?: 'in' | 'cm' | undefined;
+  scale_base_length?: number | undefined;
+  scale_base_width?: number | undefined;
   notes?: { title: string; text: string }[] | undefined;
   source_url?: string | undefined;
 }): Record<string, unknown> {
@@ -885,6 +920,14 @@ export function recipePatch(fields: {
   if (fields.servings !== undefined) patch.recipeServings = fields.servings;
   if (fields.recipe_yield !== undefined)
     patch.recipeYield = fields.recipe_yield;
+  if (fields.scale_basis !== undefined)
+    patch.recipeScaleBasis = fields.scale_basis;
+  if (fields.scale_unit !== undefined)
+    patch.recipeScaleUnit = fields.scale_unit;
+  if (fields.scale_base_length !== undefined)
+    patch.recipeScaleBaseLength = fields.scale_base_length;
+  if (fields.scale_base_width !== undefined)
+    patch.recipeScaleBaseWidth = fields.scale_base_width;
   if (fields.notes !== undefined) patch.notes = fields.notes;
   if (fields.source_url !== undefined) patch.orgURL = fields.source_url;
   return patch;

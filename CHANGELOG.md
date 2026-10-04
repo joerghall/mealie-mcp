@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      last in the file so the link definitions come along. -->
 <!-- #region changelog -->
 
+## [Unreleased]
+
+### Added
+
+- `get_recipe`, `create_recipe` and `update_recipe` support Mealie's recipe
+  scaling basis, unit and base dimensions, including round, square and
+  rectangular area scaling.
+
 ## [0.5.1] - 2026-09-29
 
 ### Fixed
