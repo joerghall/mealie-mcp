@@ -454,6 +454,20 @@ const recipeFields = {
     .max(50)
     .optional()
     .describe('Category names. They replace the existing categories.'),
+  tools: z
+    .array(z.string().trim().min(1).max(255))
+    .max(50)
+    .optional()
+    .describe(
+      'Recipe tool names, such as Oven or Stand Mixer. They replace the ' +
+        'existing tools; unknown names are created.'
+    ),
+  show_assets: z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether attachments in the recipe assets section are shown to recipe viewers.'
+    ),
   prep_time: z.string().max(100).optional(),
   cook_time: z.string().max(100).optional(),
   total_time: z.string().max(100).optional(),
@@ -525,6 +539,7 @@ const REPLACED_RECIPE_CONTENT = [
   'instructions',
   'tags',
   'categories',
+  'tools',
   'notes',
 ] as const;
 
@@ -580,6 +595,9 @@ export function registerRecipeWriteTools(
         const path = `/api/recipes/${assertPathSegment(slug, 'recipe')}`;
         let data: unknown;
         try {
+          if (fields.show_assets !== undefined) {
+            await addShowAssetsSetting(api, path, patch, fields.show_assets);
+          }
           data =
             Object.keys(patch).length > 0
               ? await api.patch(path, patch)
@@ -604,12 +622,12 @@ export function registerRecipeWriteTools(
       description:
         'Changes individual fields of a recipe. Only the fields given are ' +
         'touched; everything else keeps its value. Passing an empty array for ' +
-        'ingredients, instructions, tags or categories clears that list. ' +
+        'ingredients, instructions, tags, categories or tools clears that list. ' +
         'Replacing written content — name, description, ingredients, ' +
-        'instructions, tags, categories or notes — requires confirmation: call ' +
+        'instructions, tags, categories, tools or notes — requires confirmation: call ' +
         'once to receive a token, then again with that token. Changing only ' +
         'times, servings, yield, scaling basis, scaling dimensions or the ' +
-        'source link does not.',
+        'source link or asset visibility does not.',
       inputSchema: z.object({
         recipe: recipeRefParam,
         name: z.string().trim().min(1).max(255).optional(),
@@ -665,6 +683,10 @@ export function registerRecipeWriteTools(
         }
 
         const patch = await buildRecipePatch(api, fields);
+        if (fields.show_assets !== undefined) {
+          const path = `/api/recipes/${assertPathSegment(recipe, 'recipe')}`;
+          await addShowAssetsSetting(api, path, patch, fields.show_assets);
+        }
         if (Object.keys(patch).length === 0) {
           // Not an error, and the integration suite pins that: a model that
           // resolved every field to its current value should not be punished
@@ -880,6 +902,8 @@ export function recipePatch(fields: {
   instructions?: (string | InstructionStep)[] | undefined;
   tags?: string[] | undefined;
   categories?: string[] | undefined;
+  tools?: string[] | undefined;
+  show_assets?: boolean | undefined;
   prep_time?: string | undefined;
   cook_time?: string | undefined;
   total_time?: string | undefined;
@@ -911,7 +935,7 @@ export function recipePatch(fields: {
         : { title: step.title ?? '', text: step.text }
     );
   }
-  // Tags and categories are deliberately absent here — they are objects that
+  // Tags, categories and tools are deliberately absent here — they are objects that
   // must carry a slug, so they need a round trip to Mealie and are added by
   // {@link buildRecipePatch}.
   if (fields.prep_time !== undefined) patch.prepTime = fields.prep_time;
@@ -937,7 +961,7 @@ export function recipePatch(fields: {
  * {@link recipePatch} plus the organizer lookups it cannot do on its own.
  *
  * Kept separate so the pure field mapping stays testable without a server, and
- * so the two round trips only happen when tags or categories were actually
+ * so the round trips only happen when tags, categories or tools were actually
  * given.
  */
 async function buildRecipePatch(
@@ -955,5 +979,46 @@ async function buildRecipePatch(
       fields.categories
     );
   }
+  if (fields.tools !== undefined) {
+    patch.tools = await resolveOrganizers(api, 'tool', fields.tools);
+  }
   return patch;
+}
+
+const RECIPE_SETTING_KEYS = [
+  'public',
+  'showNutrition',
+  'showAssets',
+  'landscapeView',
+  'disableComments',
+  'locked',
+] as const;
+
+/**
+ * Adds one safe settings update to a recipe patch.
+ *
+ * Mealie replaces the nested settings record rather than patching one key in
+ * it. Read and copy every current setting first so toggling asset visibility
+ * cannot silently change public access, nutrition, layout, comments or locking.
+ */
+async function addShowAssetsSetting(
+  api: MealieApi,
+  path: string,
+  patch: Record<string, unknown>,
+  showAssets: boolean
+): Promise<void> {
+  const current = rec(await api.get(path));
+  const settings = rec(current.settings);
+  const merged: Record<string, boolean> = {};
+  for (const key of RECIPE_SETTING_KEYS) {
+    if (typeof settings[key] !== 'boolean') {
+      throw new ToolInputError(
+        `Mealie did not return the complete recipe settings; ${key} was missing. ` +
+          'Asset visibility was not changed because the other settings could not be preserved.'
+      );
+    }
+    merged[key] = settings[key];
+  }
+  merged.showAssets = showAssets;
+  patch.settings = merged;
 }

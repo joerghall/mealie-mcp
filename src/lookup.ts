@@ -197,8 +197,8 @@ async function organizerBySlug(
 /**
  * Turns organizer *names* into the full records a recipe write needs.
  *
- * Mealie's recipe routes do not accept `{name: "Dessert"}` for a tag or
- * category, even though that is what the field looks like on the way out: the
+ * Mealie's recipe routes do not accept `{name: "Dessert"}` for a tag,
+ * category or tool, even though that is what the field looks like on the way out: the
  * request model requires `slug` as well, and answers HTTP 422
  * (`loc: ["body","tags",0,"slug"]`) without it. So every name is looked up
  * first, and anything unknown is created — which is also what makes
@@ -210,7 +210,7 @@ async function organizerBySlug(
  */
 export async function resolveOrganizers(
   api: MealieApi,
-  kind: 'tag' | 'category',
+  kind: OrganizerKind,
   names: string[]
 ): Promise<Record<string, unknown>[]> {
   const path = ORGANIZER_PATHS[kind];

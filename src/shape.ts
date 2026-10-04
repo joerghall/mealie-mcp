@@ -325,9 +325,10 @@ export function recipeDetail(
     lastMade: ident(object.lastMade),
     dateAdded: ident(object.dateAdded),
     dateUpdated: ident(object.dateUpdated),
-    // Surfaced because it is the one setting with a visibility consequence: a
-    // public recipe is readable through the group's explore routes without a login.
+    // These settings change who can read the recipe and whether its attached
+    // assets are shown with it, so callers need to be able to verify writes.
     isPublic: bool(settings.public),
+    showAssets: bool(settings.showAssets),
   });
 }
 

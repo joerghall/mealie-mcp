@@ -12,6 +12,15 @@ import {
 } from './harness.js';
 import { expectPortableToolSchemas } from 'mcp-integration-harness';
 
+const RECIPE_SETTINGS = {
+  public: true,
+  showNutrition: true,
+  showAssets: false,
+  landscapeView: true,
+  disableComments: false,
+  locked: true,
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -478,8 +487,15 @@ describe('recipePatch', () => {
     expect(recipePatch({ ingredients: [] })).toEqual({ recipeIngredient: [] });
   });
 
-  it('leaves tags and categories to the caller that can resolve them', () => {
-    expect(recipePatch({ tags: ['keto'] })).toEqual({});
+  it('leaves organizers and settings to the caller that can resolve them', () => {
+    expect(
+      recipePatch({
+        tags: ['keto'],
+        categories: ['Breakfast'],
+        tools: ['Oven'],
+        show_assets: true,
+      })
+    ).toEqual({});
   });
 });
 
@@ -519,11 +535,12 @@ describe('write tools', () => {
     expect(callsOf(spy)[1]!.method).toBe('GET');
   });
 
-  it('resolves tags and categories before creating anything', async () => {
+  it('resolves tags, categories and tools before creating anything', async () => {
     // An unresolvable organizer must not leave a half-created recipe behind.
     const spy = mockFetch([
       { items: [{ id: 't', name: 'keto', slug: 'keto' }] },
       { items: [{ id: 'c', name: 'Breakfast', slug: 'breakfast' }] },
+      { items: [{ id: 'o', name: 'Oven', slug: 'oven' }] },
       'quark-bowl',
       GENERIC,
     ]);
@@ -531,16 +548,97 @@ describe('write tools', () => {
       name: 'Quark Bowl',
       tags: ['keto'],
       categories: ['Breakfast'],
+      tools: ['Oven'],
     });
     const calls = callsOf(spy);
     expect(calls[0]!.url).toContain('/api/organizers/tags');
     expect(calls[1]!.url).toContain('/api/organizers/categories');
-    expect(calls[2]!.method).toBe('POST');
-    // Mealie answers 422 without the slug on a tag or category.
-    expect(calls[3]!.body).toMatchObject({
+    expect(calls[2]!.url).toContain('/api/organizers/tools');
+    expect(calls[3]!.method).toBe('POST');
+    // Mealie answers 422 without the slug on an organizer.
+    expect(calls[4]!.body).toMatchObject({
       tags: [{ id: 't', name: 'keto', slug: 'keto' }],
       recipeCategory: [{ id: 'c', name: 'Breakfast', slug: 'breakfast' }],
+      tools: [{ id: 'o', name: 'Oven', slug: 'oven' }],
     });
+  });
+
+  it('assigns resolved tools when updating a recipe', async () => {
+    const tool = { id: 'o', name: 'Oven', slug: 'oven' };
+    const spy = mockFetch([
+      GENERIC,
+      GENERIC,
+      { items: [tool] },
+      { ...GENERIC, tools: [tool] },
+    ]);
+    const { isError, prompt } = await confirmed(
+      await connect(),
+      'update_recipe',
+      {
+        recipe: 'quark-bowl',
+        tools: ['Oven'],
+      }
+    );
+    expect(isError).toBe(false);
+    expect(prompt).toContain('tools');
+    const calls = callsOf(spy);
+    expect(calls[2]!.url).toContain('/api/organizers/tools');
+    expect(calls[3]).toMatchObject({
+      method: 'PATCH',
+      body: { tools: [tool] },
+    });
+  });
+
+  it('changes asset visibility without resetting other recipe settings', async () => {
+    const spy = mockFetch([
+      { ...GENERIC, settings: RECIPE_SETTINGS },
+      { ...GENERIC, settings: { ...RECIPE_SETTINGS, showAssets: true } },
+    ]);
+    const { isError } = await callText(await connect(), 'update_recipe', {
+      recipe: 'quark-bowl',
+      show_assets: true,
+    });
+    expect(isError).toBe(false);
+    const calls = callsOf(spy);
+    expect(calls[0]).toMatchObject({ method: 'GET' });
+    expect(calls[1]).toMatchObject({
+      method: 'PATCH',
+      body: { settings: { ...RECIPE_SETTINGS, showAssets: true } },
+    });
+  });
+
+  it('can set asset visibility while creating a recipe', async () => {
+    const spy = mockFetch([
+      'quark-bowl',
+      { ...GENERIC, settings: RECIPE_SETTINGS },
+      { ...GENERIC, settings: { ...RECIPE_SETTINGS, showAssets: true } },
+    ]);
+    const { isError } = await callText(await connect(), 'create_recipe', {
+      name: 'Quark Bowl',
+      show_assets: true,
+    });
+    expect(isError).toBe(false);
+    const calls = callsOf(spy);
+    expect(calls[0]!.method).toBe('POST');
+    expect(calls[1]!.method).toBe('GET');
+    expect(calls[2]).toMatchObject({
+      method: 'PATCH',
+      body: { settings: { ...RECIPE_SETTINGS, showAssets: true } },
+    });
+  });
+
+  it('refuses to change asset visibility when settings are incomplete', async () => {
+    const spy = mockFetch({
+      ...GENERIC,
+      settings: { public: true, showAssets: false },
+    });
+    const { text, isError } = await callText(await connect(), 'update_recipe', {
+      recipe: 'quark-bowl',
+      show_assets: true,
+    });
+    expect(isError).toBe(true);
+    expect(text).toContain('other settings could not be preserved');
+    expect(callsOf(spy)).toHaveLength(1);
   });
 
   it('says so when the recipe was created but the fields failed', async () => {

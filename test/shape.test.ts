@@ -79,7 +79,14 @@ const RECIPE = {
     cholesterolContent: null,
     fatContent: null,
   },
-  settings: { public: true, showNutrition: true, locked: false },
+  settings: {
+    public: true,
+    showNutrition: true,
+    showAssets: true,
+    landscapeView: false,
+    disableComments: false,
+    locked: false,
+  },
   assets: [],
   notes: [{ title: 'Tip', text: 'Chill it first.' }],
   extras: {},
@@ -250,8 +257,9 @@ describe('recipeDetail', () => {
     }
   });
 
-  it('surfaces the one setting with a visibility consequence', () => {
+  it('surfaces public and asset visibility settings', () => {
     expect(detail.isPublic).toBe(true);
+    expect(detail.showAssets).toBe(true);
   });
 
   it('keeps full tag and category objects, not just names', () => {

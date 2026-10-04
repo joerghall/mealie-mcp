@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `get_recipe`, `create_recipe` and `update_recipe` support Mealie's recipe
   scaling basis, unit and base dimensions, including round, square and
   rectangular area scaling.
+- `create_recipe` and `update_recipe` can assign recipe tools and change asset
+  visibility without overwriting the recipe's other settings; `get_recipe`
+  reports the current asset visibility.
 
 ## [0.5.1] - 2026-09-29
 
