@@ -33,6 +33,10 @@ const RECIPE = {
   recipeServings: 1,
   recipeYieldQuantity: 0,
   recipeYield: '',
+  recipeScaleBasis: 'round',
+  recipeScaleUnit: 'cm',
+  recipeScaleBaseLength: 24,
+  recipeScaleBaseWidth: 0,
   totalTime: '10',
   prepTime: '10',
   cookTime: null,
@@ -210,6 +214,13 @@ describe('recipeDetail', () => {
     ]);
     expect(detail.notes).toEqual([{ title: 'Tip', text: 'Chill it first.' }]);
     expect(detail.prepTime).toBe('10');
+  });
+
+  it('keeps the recipe scaling configuration', () => {
+    expect(detail.recipeScaleBasis).toBe('round');
+    expect(detail.recipeScaleUnit).toBe('cm');
+    expect(detail.recipeScaleBaseLength).toBe(24);
+    expect(detail.recipeScaleBaseWidth).toBe(0);
   });
 
   it('drops the null-valued nutrition keys', () => {

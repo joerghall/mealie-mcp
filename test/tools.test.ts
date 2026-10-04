@@ -453,6 +453,10 @@ describe('recipePatch', () => {
         total_time: '15',
         servings: 2,
         recipe_yield: '2 bowls',
+        scale_basis: 'rectangle',
+        scale_unit: 'cm',
+        scale_base_length: 30,
+        scale_base_width: 20,
         source_url: 'https://example.com',
       })
     ).toEqual({
@@ -461,6 +465,10 @@ describe('recipePatch', () => {
       totalTime: '15',
       recipeServings: 2,
       recipeYield: '2 bowls',
+      recipeScaleBasis: 'rectangle',
+      recipeScaleUnit: 'cm',
+      recipeScaleBaseLength: 30,
+      recipeScaleBaseWidth: 20,
       orgURL: 'https://example.com',
     });
   });
@@ -481,6 +489,9 @@ describe('write tools', () => {
     const { isError } = await callText(await connect(), 'create_recipe', {
       name: 'Quark Bowl',
       description: 'x',
+      scale_basis: 'round',
+      scale_unit: 'cm',
+      scale_base_length: 24,
     });
     expect(isError).toBe(false);
     const calls = callsOf(spy);
@@ -492,7 +503,12 @@ describe('write tools', () => {
     // The POST answers with the bare slug string, so the fields follow as PATCH.
     expect(calls[1]).toMatchObject({
       method: 'PATCH',
-      body: { description: 'x' },
+      body: {
+        description: 'x',
+        recipeScaleBasis: 'round',
+        recipeScaleUnit: 'cm',
+        recipeScaleBaseLength: 24,
+      },
     });
     expect(calls[1]!.url).toContain('/api/recipes/quark-bowl');
   });
