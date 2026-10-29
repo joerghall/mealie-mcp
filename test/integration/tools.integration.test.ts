@@ -324,6 +324,96 @@ describe('organizers, foods and units', () => {
 });
 
 describe('ingredients in structured form', () => {
+  it('round-trips recipe alternatives and shared food defaults, and clears only recipe alternatives', async () => {
+    const sharedFood = parse<{ id: string }>(
+      await asking.call('create_food', {
+        name: 'Integration Substitution Food',
+        substitutions: [
+          {
+            substitute_food: 'Integration Quark Duplicate',
+            note: 'Default alternative',
+          },
+          { note: 'Water as a fallback' },
+        ],
+      })
+    );
+    const created = parse<{
+      slug: string;
+      recipeIngredient: {
+        referenceId: string;
+        substitutions: { substituteFoodId?: string; note?: string }[];
+        foodSubstitutions: { substituteFoodId?: string; note?: string }[];
+      }[];
+    }>(
+      await asking.call('create_recipe', {
+        name: 'Integration Substitutions',
+        ingredients: [
+          {
+            quantity: 1,
+            food: sharedFood.id,
+            substitutions: [
+              { substitute_food: foodA, note: 'Recipe alternative' },
+              { note: 'Leave it out' },
+            ],
+          },
+        ],
+      })
+    );
+    try {
+      expect(created.recipeIngredient[0]!.substitutions).toEqual([
+        expect.objectContaining({
+          substituteFoodId: foodA,
+          note: 'Recipe alternative',
+        }),
+        { note: 'Leave it out' },
+      ]);
+      const fetched = parse<{
+        recipeIngredient: {
+          foodSubstitutions: { substituteFoodId?: string; note?: string }[];
+        }[];
+      }>(await asking.call('get_recipe', { recipe: created.slug }));
+      expect(fetched.recipeIngredient[0]!.foodSubstitutions).toEqual([
+        expect.objectContaining({
+          substituteFoodId: foodB,
+          note: 'Default alternative',
+        }),
+        { note: 'Water as a fallback' },
+      ]);
+      const listed = parse<{
+        foods: { id: string; substitutions: { substituteFoodId?: string }[] }[];
+      }>(
+        await asking.call('list_foods', {
+          search: 'Integration Substitution Food',
+        })
+      );
+      expect(
+        listed.foods.find((food) => food.id === sharedFood.id)!.substitutions
+      ).toContainEqual(expect.objectContaining({ substituteFoodId: foodB }));
+      const cleared = parse<{
+        recipeIngredient: {
+          substitutions: unknown[];
+          foodSubstitutions: unknown[];
+        }[];
+      }>(
+        await asking.call('update_recipe', {
+          recipe: created.slug,
+          ingredients: [
+            {
+              quantity: 1,
+              food: sharedFood.id,
+              reference_id: created.recipeIngredient[0]!.referenceId,
+              substitutions: [],
+            },
+          ],
+        })
+      );
+      expect(cleared.recipeIngredient[0]!.substitutions).toEqual([]);
+      expect(cleared.recipeIngredient[0]!.foodSubstitutions).toHaveLength(2);
+    } finally {
+      await asking.call('delete_recipe', { recipe: created.slug });
+    }
+  });
+
   // Runs on the food and unit created just above, before the merge further
   // down rewrites them. Mealie's parser decides on its own which of its foods a
   // line means, so nothing here depends on how it reads a particular line:

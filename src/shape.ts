@@ -213,6 +213,27 @@ function times(recipe: Record<string, unknown>): Record<string, unknown> {
   });
 }
 
+/** Avoid recursively projecting a substitute food's own alternatives. */
+function substitutions(value: unknown): Record<string, unknown>[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((item) => {
+    const object = rec(item);
+    const food = rec(object.substituteFood);
+    return defined({
+      substituteFoodId: ident(object.substituteFoodId ?? food.id),
+      substituteFood:
+        typeof food.id === 'string'
+          ? defined({
+              id: ident(food.id),
+              name: cap(food.name, NAME_MAX),
+              pluralName: cap(food.pluralName, NAME_MAX),
+            })
+          : undefined,
+      note: cap(object.note, TEXT_MAX),
+    });
+  });
+}
+
 function ingredient(value: unknown): Record<string, unknown> {
   const object = rec(value);
   const unit = rec(object.unit);
@@ -227,6 +248,8 @@ function ingredient(value: unknown): Record<string, unknown> {
     note: cap(object.note, TEXT_MAX),
     title: cap(object.title, NAME_MAX),
     referenceId: ident(object.referenceId),
+    substitutions: substitutions(object.substitutions),
+    foodSubstitutions: substitutions(food.substitutions),
   });
 }
 
@@ -368,6 +391,7 @@ export function foodSummary(value: unknown): Record<string, unknown> {
     pluralName: cap(object.pluralName, NAME_MAX),
     description: cap(object.description, SUMMARY_DESCRIPTION_MAX),
     label: cap(label.name, SHORT_MAX),
+    substitutions: substitutions(object.substitutions),
     aliases: arr(object.aliases)
       .map((a) => cap(rec(a).name, NAME_MAX))
       .filter((name): name is string => name !== undefined),

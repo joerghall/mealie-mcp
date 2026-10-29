@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Read recipe-specific and shared food substitutions; write recipe ingredient
+  alternatives and create foods with shared defaults. Existing substitute foods
+  resolve by name, plural, alias, or UUID before any write.
+
 - Create and update meal-plan entries with a positive recipe quantity multiplier.
   Meal-plan responses expose `recipeScale`; unrelated updates preserve it.
 

@@ -111,7 +111,7 @@ Creates a recipe from the given fields. To add one from a website use
 | --- | --- | --- | --- |
 | `name` | string | yes | Recipe name. Mealie derives the slug from it and rejects a duplicate |
 | `description` | string | no | Recipe description |
-| `ingredients` | (string \| { quantity?, unit?, food?, note?, title?, original_text? })[] | no | Ingredient lines. They replace the existing list. A plain string (`"500 g quark"`) is stored as free text, which Mealie shows as not parsed; an object is stored structured, with `unit` and `food` given by name, plural, abbreviation, alias or UUID. An unknown food or unit is an error — create it with `create_food` / `create_unit` first. To structure the existing lines of a recipe in place, use `parse_recipe_ingredients` |
+| `ingredients` | (string \| { quantity?, unit?, food?, note?, title?, original_text?, reference_id?, substitutions? })[] | no | Ingredient lines. They replace the existing list. A plain string (`"500 g quark"`) is stored as free text, which Mealie shows as not parsed; an object is stored structured, with `unit` and `food` given by name, plural, abbreviation, alias or UUID. An unknown food or unit is an error — create it with `create_food` / `create_unit` first. To structure the existing lines of a recipe in place, use `parse_recipe_ingredients` |
 | `instructions` | string[] \| { id?, title?, summary?, text, ingredient_references?, note_references?, duration_seconds? }[] | no | Preparation steps, in order. They replace the existing list. A step is plain text or a structured object; preserve IDs, summaries and references when editing |
 | `tags` | string[] | no | Tag names. They replace the existing tags; unknown names are created |
 | `categories` | string[] | no | Category names. They replace the existing categories |
@@ -340,6 +340,7 @@ it.
 | `plural_name` | string | no | Plural form |
 | `description` | string | no | Description |
 | `label_id` | string (UUID) | no | Shopping-list label to file this food under |
+| `substitutions` | { substitute_food?, note? }[] | no | Shared alternatives for the new food. Each needs an existing food name/alias/UUID, a nonempty note, or both |
 
 ### merge_foods 👤
 
@@ -767,3 +768,27 @@ exclude recipes without the corresponding numeric duration. Use equal minimum
 and maximum values for an exact duration. An inverted range is rejected before
 any API call. Duration filters work with cookbook, organizer, text, and
 `unparsed_only` filters under the same combination rules as other searches.
+
+### Ingredient substitutions
+
+Structured ingredient objects in `create_recipe` and `update_recipe` accept
+`substitutions`, an array of up to 50 objects with `substitute_food` and/or `note`.
+A substitute food is resolved by name, plural, alias, or UUID. It must already
+exist; unknown foods fail before a recipe is created or an update is confirmed.
+A note can describe an alternative without a food record, such as
+`{note: "Water and a bouillon cube"}`. Food and note can also be combined.
+
+The default `get_recipe` view exposes two separate lists on each ingredient:
+`substitutions` for recipe-specific alternatives and `foodSubstitutions` for
+shared alternatives on its food record. Entries use Mealie's camelCase names:
+`substituteFoodId`, `substituteFood` (ID/name/plural), and `note`. `list_foods`
+also exposes shared substitutions. These lists are kept separate because Mealie
+shows both; clearing recipe-specific alternatives does not clear shared ones.
+
+Recipe ingredient updates replace the entire ingredient list and require the
+existing confirmation flow. Copy quantities, food/unit references, section
+headings, reference IDs, and substitutions when editing; omitted fields are not
+merged from old ingredient lines. Use `substitutions: []` to clear local
+alternatives. `create_food` accepts the same input shape for a new food's shared
+alternatives; editing existing shared food defaults remains a Mealie UI operation.
+Substitutions require Mealie 3.26 or later.

@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import {
+  mapSubstitutions,
+  substitutionFoods,
+  substitutionsParam,
+} from '../substitutions.js';
 import { marked, plain } from '../output-schema.js';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
@@ -552,6 +557,7 @@ const structuredIngredient = z
       .max(255)
       .optional()
       .describe('A section heading that starts at this line, e.g. "Sauce"'),
+    substitutions: substitutionsParam,
     reference_id: uuidParam
       .optional()
       .describe('Stable ID used by instruction ingredient references'),
@@ -595,7 +601,7 @@ const recipeFields = {
     .describe(
       'Ingredient lines. They replace the existing list. Each is either free ' +
         'text ("500 g quark"), which Mealie shows as unparsed, or an object ' +
-        '{quantity, unit, food, note, title, original_text} with unit and food ' +
+        '{quantity, unit, food, note, title, original_text, reference_id, substitutions} with unit and food ' +
         'given by name or UUID. Unknown foods and units are an error, not ' +
         'created: add them with create_food/create_unit first. To structure ' +
         "a recipe's existing lines in place, use parse_recipe_ingredients."
@@ -1513,6 +1519,9 @@ function structuredLine(
     food: line.food === undefined ? null : refFor(refs.foods, line.food),
     note: line.note ?? '',
     ...(line.title === undefined ? {} : { title: line.title }),
+    ...(line.substitutions === undefined
+      ? {}
+      : { substitutions: mapSubstitutions(line.substitutions, refs.foods) }),
     ...(line.reference_id === undefined
       ? {}
       : { referenceId: line.reference_id }),
@@ -1549,9 +1558,10 @@ export async function resolveIngredientRefs(
   const structured = (ingredients ?? []).filter(
     (line): line is StructuredIngredient => typeof line !== 'string'
   );
-  const foods = structured.flatMap((line) =>
-    line.food === undefined ? [] : [line.food]
-  );
+  const foods = structured.flatMap((line) => [
+    ...(line.food === undefined ? [] : [line.food]),
+    ...substitutionFoods(line.substitutions),
+  ]);
   const units = structured.flatMap((line) =>
     line.unit === undefined ? [] : [line.unit]
   );

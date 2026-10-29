@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  mapSubstitutions,
+  substitutionFoods,
+  substitutionsParam,
+} from '../substitutions.js';
+import { resolveVocabulary } from '../lookup.js';
 import { marked } from '../output-schema.js';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
@@ -141,6 +147,7 @@ export function registerFoodWriteTools(
       inputSchema: z.object({
         name: z.string().trim().min(1).max(255),
         plural_name: z.string().trim().min(1).max(255).optional(),
+        substitutions: substitutionsParam,
         description: z.string().max(2000).optional(),
         label_id: uuidParam
           .optional()
@@ -149,13 +156,21 @@ export function registerFoodWriteTools(
       annotations: WRITE,
       outputSchema: marked(),
     },
-    async ({ name, plural_name, description, label_id }) =>
+    async ({ name, plural_name, description, label_id, substitutions }) =>
       run(async () => {
+        const substituteFoods = substitutionFoods(substitutions);
+        const refs =
+          substituteFoods.length > 0
+            ? await resolveVocabulary(api, 'food', substituteFoods)
+            : new Map();
         const data = await api.post('/api/foods', {
           name,
           ...(plural_name === undefined ? {} : { pluralName: plural_name }),
           ...(description === undefined ? {} : { description }),
           ...(label_id === undefined ? {} : { labelId: label_id }),
+          ...(substitutions === undefined
+            ? {}
+            : { substitutions: mapSubstitutions(substitutions, refs) }),
         });
         return untrustedResult(foodSummary(data));
       })
