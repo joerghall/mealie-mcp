@@ -207,6 +207,9 @@ function times(recipe: Record<string, unknown>): Record<string, unknown> {
     prepTime: cap(recipe.prepTime, SHORT_MAX),
     cookTime: cap(recipe.cookTime, SHORT_MAX),
     performTime: cap(recipe.performTime, SHORT_MAX),
+    totalTimeSeconds: num(recipe.totalTimeSeconds),
+    prepTimeSeconds: num(recipe.prepTimeSeconds),
+    performTimeSeconds: num(recipe.performTimeSeconds),
   });
 }
 

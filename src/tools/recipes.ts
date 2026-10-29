@@ -82,6 +82,9 @@ const organizerListParam = (what: string) =>
  */
 const ORGANIZER_FILTERS = ['tags', 'categories', 'tools'] as const;
 
+/** Mealie stores durations as signed 32-bit integer seconds. */
+const durationSeconds = z.number().int().min(0).max(2_147_483_647);
+
 export function registerRecipeReadTools(
   server: McpServer,
   api: MealieApi,
@@ -148,6 +151,36 @@ export function registerRecipeReadTools(
               'ingredients count as well. Use it to page through a collection ' +
               'with parse_recipe_ingredients.'
           ),
+        min_total_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Minimum total time in seconds, inclusive; excludes unknown durations'
+          ),
+        max_total_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Maximum total time in seconds, inclusive; excludes unknown durations'
+          ),
+        min_prep_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Minimum preparation time in seconds, inclusive; excludes unknown durations'
+          ),
+        max_prep_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Maximum preparation time in seconds, inclusive; excludes unknown durations'
+          ),
+        min_perform_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Minimum cooking/perform time in seconds, inclusive; excludes unknown durations'
+          ),
+        max_perform_time_seconds: durationSeconds
+          .optional()
+          .describe(
+            'Maximum cooking/perform time in seconds, inclusive; excludes unknown durations'
+          ),
         order_by: z
           .enum([
             'name',
@@ -182,12 +215,44 @@ export function registerRecipeReadTools(
       require_all_tools,
       require_all_foods,
       unparsed_only,
+      min_total_time_seconds,
+      max_total_time_seconds,
+      min_prep_time_seconds,
+      max_prep_time_seconds,
+      min_perform_time_seconds,
+      max_perform_time_seconds,
       order_by,
       order_direction,
       page,
       per_page,
     }) =>
       run(async () => {
+        const durationRanges = [
+          [
+            'total_time_seconds',
+            min_total_time_seconds,
+            max_total_time_seconds,
+          ],
+          ['prep_time_seconds', min_prep_time_seconds, max_prep_time_seconds],
+          [
+            'perform_time_seconds',
+            min_perform_time_seconds,
+            max_perform_time_seconds,
+          ],
+        ] as const;
+        const filters: string[] = [];
+        if (unparsed_only === true)
+          filters.push('recipeIngredient.foodId IS NULL');
+        for (const [field, min, max] of durationRanges) {
+          if (min !== undefined && max !== undefined && min > max) {
+            throw new ToolInputError(
+              `min_${field} must not exceed max_${field}.`
+            );
+          }
+          if (min !== undefined) filters.push(`${field} >= ${min}`);
+          if (max !== undefined) filters.push(`${field} <= ${max}`);
+        }
+
         // Mealie's `_build_recipe_filter` returns the cookbook's own filter and
         // returns early, so the organizer filters never reach the query. The
         // description above promises AND; without this the promise would be
@@ -243,10 +308,7 @@ export function registerRecipeReadTools(
             // relationship is an inner join and matches nothing that is
             // missing, the column matches every line without a food —
             // verified on v3.28.0, cookbook filter included.
-            queryFilter:
-              unparsed_only === true
-                ? 'recipeIngredient.foodId IS NULL'
-                : undefined,
+            queryFilter: filters.length > 0 ? filters.join(' AND ') : undefined,
             orderBy: order_by,
             // Mealie's pagination model validates this one into existence:
             // `paginationSeed is required when orderBy is random`, HTTP 422.
@@ -578,6 +640,25 @@ const recipeFields = {
   prep_time: z.string().max(100).optional(),
   cook_time: z.string().max(100).optional(),
   total_time: z.string().max(100).optional(),
+  perform_time: z.string().max(100).optional(),
+  total_time_seconds: durationSeconds
+    .nullable()
+    .optional()
+    .describe(
+      'Structured total duration in seconds; null clears it; requires Mealie 3.29+'
+    ),
+  prep_time_seconds: durationSeconds
+    .nullable()
+    .optional()
+    .describe(
+      'Structured preparation duration in seconds; null clears it; requires Mealie 3.29+'
+    ),
+  perform_time_seconds: durationSeconds
+    .nullable()
+    .optional()
+    .describe(
+      'Structured cooking/perform duration in seconds; null clears it; requires Mealie 3.29+'
+    ),
   servings: z.number().min(0).max(10_000).optional(),
   recipe_yield: z.string().max(255).optional(),
   scale_basis: z
@@ -1322,6 +1403,10 @@ export function recipePatch(
     prep_time?: string | undefined;
     cook_time?: string | undefined;
     total_time?: string | undefined;
+    perform_time?: string | undefined;
+    total_time_seconds?: number | null | undefined;
+    prep_time_seconds?: number | null | undefined;
+    perform_time_seconds?: number | null | undefined;
     servings?: number | undefined;
     recipe_yield?: string | undefined;
     scale_basis?: 'servings' | 'round' | 'square' | 'rectangle' | undefined;
@@ -1382,6 +1467,14 @@ export function recipePatch(
   if (fields.prep_time !== undefined) patch.prepTime = fields.prep_time;
   if (fields.cook_time !== undefined) patch.cookTime = fields.cook_time;
   if (fields.total_time !== undefined) patch.totalTime = fields.total_time;
+  if (fields.perform_time !== undefined)
+    patch.performTime = fields.perform_time;
+  if (fields.total_time_seconds !== undefined)
+    patch.totalTimeSeconds = fields.total_time_seconds;
+  if (fields.prep_time_seconds !== undefined)
+    patch.prepTimeSeconds = fields.prep_time_seconds;
+  if (fields.perform_time_seconds !== undefined)
+    patch.performTimeSeconds = fields.perform_time_seconds;
   if (fields.servings !== undefined) patch.recipeServings = fields.servings;
   if (fields.recipe_yield !== undefined)
     patch.recipeYield = fields.recipe_yield;

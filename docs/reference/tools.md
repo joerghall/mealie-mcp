@@ -64,6 +64,9 @@ the matching `require_all_*` flag is set.
 | `require_all_tools` | boolean | no | Same, for tools |
 | `require_all_foods` | boolean | no | Same, for foods |
 | `unparsed_only` | boolean | no | Only recipes with at least one ingredient line that has no food yet — the ones Mealie flags as not parsed. Recipes without ingredients count as well |
+| `min_total_time_seconds`, `max_total_time_seconds` | integer | no | Inclusive total duration range in seconds; requires Mealie 3.29+; excludes unknown durations |
+| `min_prep_time_seconds`, `max_prep_time_seconds` | integer | no | Inclusive preparation duration range in seconds; requires Mealie 3.29+; excludes unknown durations |
+| `min_perform_time_seconds`, `max_perform_time_seconds` | integer | no | Inclusive cooking/perform duration range in seconds; requires Mealie 3.29+; excludes unknown durations |
 | `order_by` | enum | no | `name` \| `rating` \| `created_at` \| `updated_at` \| `last_made` \| `random`; default `created_at` |
 | `order_direction` | enum | no | `asc` \| `desc`, default `desc` |
 | `page` | number | no | 1-based page number, default 1 |
@@ -115,6 +118,8 @@ Creates a recipe from the given fields. To add one from a website use
 | `prep_time` | string | no | Preparation time |
 | `cook_time` | string | no | Cooking time |
 | `total_time` | string | no | Total time |
+| `perform_time` | string | no | Legacy cooking/perform time text |
+| `total_time_seconds`, `prep_time_seconds`, `perform_time_seconds` | integer or null | no | Structured durations in seconds, from 0 to 2147483647; `null` clears the value; requires Mealie 3.29+ |
 | `servings` | number | no | Number of servings |
 | `recipe_yield` | string | no | Yield as text |
 | `notes` | { title, text }[] | no | Notes attached to the recipe |
@@ -132,7 +137,7 @@ exposed.
 | --- | --- | --- | --- |
 | `recipe` | string | yes | Recipe slug or UUID |
 | `name` | string | no | New recipe name |
-| …same optional fields as `create_recipe` | | | `description`, `ingredients`, `instructions`, `tags`, `categories`, `prep_time`, `cook_time`, `total_time`, `servings`, `recipe_yield`, `notes`, `source_url` |
+| …same optional fields as `create_recipe` | | | `description`, `ingredients`, `instructions`, `tags`, `categories`, `prep_time`, `cook_time`, `total_time`, `perform_time`, `total_time_seconds`, `prep_time_seconds`, `perform_time_seconds`, `servings`, `recipe_yield`, `notes`, `source_url` |
 
 ### parse_recipe_ingredients 👤
 
@@ -743,3 +748,18 @@ summaries, references and timers when changing text; omitted metadata is not
 merged from the previous recipe. Empty reference arrays explicitly remove links.
 Step timers require the Mealie fork/version with `durationSeconds` support;
 use a positive integer number of seconds, or `null` to clear a timer.
+
+### Structured recipe times
+
+Mealie 3.29+ stores numeric `totalTimeSeconds`, `prepTimeSeconds`, and
+`performTimeSeconds`. These appear in both recipe summaries and the default
+recipe detail. `perform_time_seconds` is the cooking duration; Mealie has no
+separate `cookTimeSeconds` field. The existing text fields remain independent:
+writing seconds does not parse, clear, or overwrite the legacy text fields.
+
+For recipes taking at most 30 minutes, call `search_recipes` with
+`max_total_time_seconds: 1800`. Bounds are inclusive, combine with AND, and
+exclude recipes without the corresponding numeric duration. Use equal minimum
+and maximum values for an exact duration. An inverted range is rejected before
+any API call. Duration filters work with cookbook, organizer, text, and
+`unparsed_only` filters under the same combination rules as other searches.

@@ -339,6 +339,59 @@ describe('read tools', () => {
     expect(url.searchParams.get('requireAllTags')).toBe('true');
   });
 
+  it('combines duration ranges with existing filters in the server query', async () => {
+    const spy = mockFetch();
+    const { isError } = await callText(await connect(), 'search_recipes', {
+      cookbook: 'quick-meals',
+      unparsed_only: true,
+      min_total_time_seconds: 0,
+      max_total_time_seconds: 1800,
+      min_prep_time_seconds: 60,
+      max_prep_time_seconds: 600,
+      min_perform_time_seconds: 120,
+      max_perform_time_seconds: 1200,
+    });
+    expect(isError).toBe(false);
+    const url = new URL(callsOf(spy)[0]!.url);
+    expect(url.searchParams.get('cookbook')).toBe('quick-meals');
+    expect(url.searchParams.get('queryFilter')).toBe(
+      'recipeIngredient.foodId IS NULL AND total_time_seconds >= 0 AND total_time_seconds <= 1800 AND prep_time_seconds >= 60 AND prep_time_seconds <= 600 AND perform_time_seconds >= 120 AND perform_time_seconds <= 1200'
+    );
+  });
+
+  it.each(['total', 'prep', 'perform'])(
+    'rejects inverted %s duration ranges before any API request',
+    async (field) => {
+      const spy = mockFetch();
+      const { text, isError } = await callText(
+        await connect(),
+        'search_recipes',
+        {
+          [`min_${field}_time_seconds`]: 120,
+          [`max_${field}_time_seconds`]: 60,
+          tags: ['would-trigger-a-lookup'],
+        }
+      );
+      expect(isError).toBe(true);
+      expect(text).toContain(
+        `min_${field}_time_seconds must not exceed max_${field}_time_seconds`
+      );
+      expect(spy).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([-1, 1.5, 2147483648, '1800', null])(
+    'rejects invalid search duration %j',
+    async (value) => {
+      const spy = mockFetch();
+      const { isError } = await callText(await connect(), 'search_recipes', {
+        max_total_time_seconds: value,
+      });
+      expect(isError).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
+    }
+  );
+
   it('caps per_page at 100', async () => {
     const spy = mockFetch();
     const { text, isError } = await callText(
@@ -608,6 +661,64 @@ describe('write tools', () => {
     });
     expect(calls[1]!.url).toContain('/api/recipes/quark-bowl');
   });
+
+  it('writes numeric durations through create and update, including zero and clearing', async () => {
+    const spy = mockFetch(['timed-recipe', GENERIC, GENERIC]);
+    const client = await connect();
+    expect(
+      (
+        await callText(client, 'create_recipe', {
+          name: 'Timed recipe',
+          total_time_seconds: 1800,
+          prep_time_seconds: 0,
+          perform_time_seconds: 1200,
+          perform_time: 'Until golden',
+        })
+      ).isError
+    ).toBe(false);
+    expect(callsOf(spy)[1]!.body).toEqual({
+      totalTimeSeconds: 1800,
+      prepTimeSeconds: 0,
+      performTimeSeconds: 1200,
+      performTime: 'Until golden',
+    });
+    expect(
+      (
+        await callText(client, 'update_recipe', {
+          recipe: 'timed-recipe',
+          total_time_seconds: null,
+          prep_time_seconds: null,
+          perform_time_seconds: null,
+        })
+      ).isError
+    ).toBe(false);
+    expect(callsOf(spy)[2]!.body).toEqual({
+      totalTimeSeconds: null,
+      prepTimeSeconds: null,
+      performTimeSeconds: null,
+    });
+    await client.close();
+  });
+
+  it.each(['total', 'prep', 'perform'])(
+    'validates numeric %s durations before creating a recipe',
+    async (field) => {
+      const spy = mockFetch();
+      const client = await connect();
+      for (const value of [-1, 1.5, 2147483648, '60']) {
+        expect(
+          (
+            await callText(client, 'create_recipe', {
+              name: 'Invalid',
+              [`${field}_time_seconds`]: value,
+            })
+          ).isError
+        ).toBe(true);
+      }
+      expect(spy).not.toHaveBeenCalled();
+      await client.close();
+    }
+  );
 
   it('reads the recipe back when there is nothing to patch', async () => {
     const spy = mockFetch(['quark-bowl', GENERIC]);

@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Read and write Mealie 3.29 structured total, prep, and cooking/perform durations
+  in seconds. Search recipes with inclusive minimum/maximum duration filters.
+
 - Structured instruction read/write support for step IDs, summaries, ingredient
   and note references, and optional step timers. Ingredient and note reference
   IDs can be supplied so links survive recipe edits.

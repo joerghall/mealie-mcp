@@ -258,6 +258,26 @@ describe('recipeDetail', () => {
     ]);
   });
 
+  it('includes structured durations in summaries and details alongside legacy times', () => {
+    const timed = {
+      ...RECIPE,
+      totalTimeSeconds: 1800,
+      prepTimeSeconds: 0,
+      performTimeSeconds: 1200,
+    };
+    for (const project of [recipeDetail, recipeSummary]) {
+      expect(project(timed)).toMatchObject({
+        totalTimeSeconds: 1800,
+        prepTimeSeconds: 0,
+        performTimeSeconds: 1200,
+        totalTime: '10',
+      });
+      expect(project({ totalTimeSeconds: null })).not.toHaveProperty(
+        'totalTimeSeconds'
+      );
+    }
+  });
+
   it('keeps the recipe scaling configuration', () => {
     expect(detail.recipeScaleBasis).toBe('round');
     expect(detail.recipeScaleUnit).toBe('cm');

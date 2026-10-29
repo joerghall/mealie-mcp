@@ -144,6 +144,70 @@ describe('a recipe through its whole life', () => {
     await asking.call('suggest_recipes', {});
   });
 
+  it('round-trips structured times and applies duration filters on the server', async () => {
+    const timedSlug = parse<{ slug: string }>(
+      await asking.call('create_recipe', {
+        name: 'Duration filter fixture',
+        total_time_seconds: 1800,
+        prep_time_seconds: 0,
+        perform_time_seconds: 1200,
+      })
+    ).slug;
+    try {
+      const fetched = parse<Record<string, unknown>>(
+        await asking.call('get_recipe', { recipe: timedSlug })
+      );
+      expect(fetched).toMatchObject({
+        totalTimeSeconds: 1800,
+        prepTimeSeconds: 0,
+        performTimeSeconds: 1200,
+      });
+      const found = parse<{
+        recipes: { slug: string; totalTimeSeconds?: number }[];
+      }>(
+        await asking.call('search_recipes', {
+          search: 'Duration filter fixture',
+          min_total_time_seconds: 1800,
+          max_total_time_seconds: 1800,
+          min_prep_time_seconds: 0,
+          max_prep_time_seconds: 0,
+          min_perform_time_seconds: 1200,
+          max_perform_time_seconds: 1200,
+        })
+      );
+      expect(found.recipes).toEqual([
+        expect.objectContaining({ slug: timedSlug, totalTimeSeconds: 1800 }),
+      ]);
+      const excluded = parse<{ recipes: unknown[] }>(
+        await asking.call('search_recipes', {
+          search: 'Duration filter fixture',
+          max_total_time_seconds: 1799,
+        })
+      );
+      expect(excluded.recipes).toEqual([]);
+      const updated = parse<Record<string, unknown>>(
+        await asking.call('update_recipe', {
+          recipe: timedSlug,
+          total_time_seconds: null,
+          prep_time_seconds: null,
+          perform_time_seconds: null,
+        })
+      );
+      expect(updated).not.toHaveProperty('totalTimeSeconds');
+      expect(updated).not.toHaveProperty('prepTimeSeconds');
+      expect(updated).not.toHaveProperty('performTimeSeconds');
+      const unknown = parse<{ recipes: unknown[] }>(
+        await asking.call('search_recipes', {
+          search: 'Duration filter fixture',
+          max_total_time_seconds: 1800,
+        })
+      );
+      expect(unknown.recipes).toEqual([]);
+    } finally {
+      await asking.call('delete_recipe', { recipe: timedSlug });
+    }
+  });
+
   it('records when it was last made, and duplicates it', async () => {
     await asking.call('set_recipe_last_made', {
       recipe: slug,
