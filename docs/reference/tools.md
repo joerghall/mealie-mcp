@@ -109,7 +109,7 @@ Creates a recipe from the given fields. To add one from a website use
 | `name` | string | yes | Recipe name. Mealie derives the slug from it and rejects a duplicate |
 | `description` | string | no | Recipe description |
 | `ingredients` | (string \| { quantity?, unit?, food?, note?, title?, original_text? })[] | no | Ingredient lines. They replace the existing list. A plain string (`"500 g quark"`) is stored as free text, which Mealie shows as not parsed; an object is stored structured, with `unit` and `food` given by name, plural, abbreviation, alias or UUID. An unknown food or unit is an error — create it with `create_food` / `create_unit` first. To structure the existing lines of a recipe in place, use `parse_recipe_ingredients` |
-| `instructions` | string[] \| { title?, text }[] | no | Preparation steps, in order. They replace the existing list. A step is either plain text or `{ title, text }` when it carries its own heading |
+| `instructions` | string[] \| { id?, title?, summary?, text, ingredient_references?, note_references?, duration_seconds? }[] | no | Preparation steps, in order. They replace the existing list. A step is plain text or a structured object; preserve IDs, summaries and references when editing |
 | `tags` | string[] | no | Tag names. They replace the existing tags; unknown names are created |
 | `categories` | string[] | no | Category names. They replace the existing categories |
 | `prep_time` | string | no | Preparation time |
@@ -728,3 +728,18 @@ sent the old one finds a dead link, and this server cannot tell whom that was.
 Reports the Mealie version and the identity the API token acts as: user, group,
 household and the permission flags that decide which write tools will actually
 succeed. Start here when a call fails with a 403. Takes no parameters.
+
+### Structured instruction metadata
+
+Instruction objects accept `id`, `title`, `summary`, `text`,
+`ingredient_references`, `note_references`, and `duration_seconds`.
+References are arrays of `{reference_id: "UUID"}`. They target the `reference_id`
+of a structured ingredient or recipe note, both of which can now be supplied
+when creating or updating recipes. Read responses use Mealie's camelCase names.
+The default recipe view includes these IDs and reference lists.
+
+Updating `instructions` replaces the whole list. Copy the existing step IDs,
+summaries, references and timers when changing text; omitted metadata is not
+merged from the previous recipe. Empty reference arrays explicitly remove links.
+Step timers require the Mealie fork/version with `durationSeconds` support;
+use a positive integer number of seconds, or `null` to clear a timer.

@@ -217,10 +217,45 @@ describe('recipeDetail', () => {
       },
     ]);
     expect(detail.recipeInstructions).toEqual([
-      { id: 'step-1', text: 'Add the quark to a bowl.' },
+      {
+        id: 'step-1',
+        text: 'Add the quark to a bowl.',
+        ingredientReferences: [],
+      },
     ]);
     expect(detail.notes).toEqual([{ title: 'Tip', text: 'Chill it first.' }]);
     expect(detail.prepTime).toBe('10');
+  });
+
+  it('keeps instruction metadata and reference targets in the default view', () => {
+    const linkedDetail = recipeDetail({
+      recipeInstructions: [
+        {
+          id: 'step',
+          title: 'Bake',
+          summary: 'Until golden',
+          text: 'Bake it.',
+          ingredientReferences: [{ referenceId: 'ingredient' }],
+          noteReferences: [{ referenceId: 'note' }],
+          durationSeconds: 1200,
+        },
+      ],
+      notes: [{ title: 'Tip', text: 'Watch closely.', referenceId: 'note' }],
+    });
+    expect(linkedDetail.recipeInstructions).toEqual([
+      {
+        id: 'step',
+        title: 'Bake',
+        summary: 'Until golden',
+        text: 'Bake it.',
+        ingredientReferences: [{ referenceId: 'ingredient' }],
+        noteReferences: [{ referenceId: 'note' }],
+        durationSeconds: 1200,
+      },
+    ]);
+    expect(linkedDetail.notes).toEqual([
+      { title: 'Tip', text: 'Watch closely.', referenceId: 'note' },
+    ]);
   });
 
   it('keeps the recipe scaling configuration', () => {

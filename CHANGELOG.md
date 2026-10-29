@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Structured instruction read/write support for step IDs, summaries, ingredient
+  and note references, and optional step timers. Ingredient and note reference
+  IDs can be supplied so links survive recipe edits.
+
 - `get_recipe`, `create_recipe` and `update_recipe` support Mealie's recipe
   scaling basis, unit and base dimensions, including round, square and
   rectangular area scaling.

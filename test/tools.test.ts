@@ -432,6 +432,86 @@ describe('recipePatch', () => {
     });
   });
 
+  it('preserves instruction identity, summaries, references and timers through the tool schema', async () => {
+    const stepId = '11111111-1111-4111-8111-111111111111';
+    const ingredientId = '22222222-2222-4222-8222-222222222222';
+    const noteId = '33333333-3333-4333-8333-333333333333';
+    const spy = mockFetch(['linked-recipe', GENERIC]);
+    const { isError } = await callText(await connect(), 'create_recipe', {
+      name: 'Linked recipe',
+      ingredients: [{ note: 'Batter', reference_id: ingredientId }],
+      notes: [{ title: 'Tip', text: 'Watch closely.', reference_id: noteId }],
+      instructions: [
+        {
+          id: stepId,
+          title: '',
+          summary: 'Until golden',
+          text: 'Bake it.',
+          ingredient_references: [{ reference_id: ingredientId }],
+          note_references: [{ reference_id: noteId }],
+          duration_seconds: 1200,
+        },
+      ],
+    });
+    expect(isError).toBe(false);
+    expect(callsOf(spy)[1]!.body).toMatchObject({
+      recipeIngredient: [{ referenceId: ingredientId }],
+      notes: [{ referenceId: noteId }],
+      recipeInstructions: [
+        {
+          id: stepId,
+          title: '',
+          summary: 'Until golden',
+          text: 'Bake it.',
+          ingredientReferences: [{ referenceId: ingredientId }],
+          noteReferences: [{ referenceId: noteId }],
+          durationSeconds: 1200,
+        },
+      ],
+    });
+    expect(
+      recipePatch({
+        instructions: [
+          {
+            text: 'Done.',
+            ingredient_references: [],
+            note_references: [],
+            duration_seconds: null,
+          },
+        ],
+      })
+    ).toEqual({
+      recipeInstructions: [
+        {
+          title: '',
+          text: 'Done.',
+          ingredientReferences: [],
+          noteReferences: [],
+          durationSeconds: null,
+        },
+      ],
+    });
+  });
+
+  it.each([
+    { id: 'invalid' },
+    { ingredient_references: [{ reference_id: 'invalid' }] },
+    { duration_seconds: 0 },
+    { duration_seconds: 1.5 },
+    { duration_seconds: 2147483648 },
+  ])(
+    'rejects invalid instruction metadata before writing: %j',
+    async (metadata) => {
+      const spy = mockFetch(GENERIC);
+      const { isError } = await callText(await connect(), 'create_recipe', {
+        name: 'Invalid',
+        instructions: [{ text: 'Mix.', ...metadata }],
+      });
+      expect(isError).toBe(true);
+      expect(callsOf(spy)).toHaveLength(0);
+    }
+  );
+
   it('maps a step object without a title the same as a bare string', () => {
     expect(recipePatch({ instructions: [{ text: 'Mix it.' }] })).toEqual({
       recipeInstructions: [{ title: '', text: 'Mix it.' }],

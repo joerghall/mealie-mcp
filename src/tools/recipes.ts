@@ -421,18 +421,25 @@ export function registerRecipeReadTools(
   );
 }
 
-/**
- * One preparation step in the object form of `instructions`.
- *
- * Mealie's `recipeInstructions` entries carry a `title` beside the `text`, and
- * a step with its own heading — "Prep", "Bake" — had no way through this
- * server while the field was a bare string. The string form stays, because it
- * is what a caller writes when the step has no heading, and it maps to the
- * same `{title: '', text}` this server always sent.
- */
+/** One preparation step; references point to ingredient/note reference IDs. */
+const instructionReference = z.object({ reference_id: uuidParam });
 const instructionStep = z.object({
-  title: z.string().trim().min(1).max(255).optional(),
+  id: uuidParam.optional(),
+  title: z.string().trim().max(255).optional(),
+  summary: z.string().max(1000).optional(),
   text: z.string().trim().min(1).max(20_000),
+  ingredient_references: z.array(instructionReference).max(200).optional(),
+  note_references: z.array(instructionReference).max(50).optional(),
+  duration_seconds: z
+    .number()
+    .int()
+    .min(1)
+    .max(2_147_483_647)
+    .nullable()
+    .optional()
+    .describe(
+      'Step timer in seconds; requires a Mealie version with step timers. Null clears it.'
+    ),
 });
 
 /** A step once zod has parsed it, as {@link recipePatch} receives it. */
@@ -483,6 +490,9 @@ const structuredIngredient = z
       .max(255)
       .optional()
       .describe('A section heading that starts at this line, e.g. "Sauce"'),
+    reference_id: uuidParam
+      .optional()
+      .describe('Stable ID used by instruction ingredient references'),
     original_text: z
       .string()
       .trim()
@@ -534,9 +544,10 @@ const recipeFields = {
     .optional()
     .describe(
       'Preparation steps, in order. They replace the existing list. Each ' +
-        'step is either plain text or an object {title, text} when the step ' +
-        'has its own heading (e.g. "Prep", "Bake"); a bare string is ' +
-        'equivalent to {text} with no title.'
+        'step is plain text or {id?, title?, summary?, text, ingredient_references?, ' +
+        'note_references?, duration_seconds?}. Copy existing IDs and metadata when ' +
+        'editing steps to preserve links and timers. References are objects ' +
+        '{reference_id} matching an ingredient or note reference_id.'
     ),
   tags: z
     .array(z.string().trim().min(1).max(255))
@@ -603,6 +614,7 @@ const recipeFields = {
       z.object({
         title: z.string().trim().min(1).max(255),
         text: z.string().max(20_000),
+        reference_id: uuidParam.optional(),
       })
     )
     .max(50)
@@ -1316,7 +1328,9 @@ export function recipePatch(
     scale_unit?: 'in' | 'cm' | undefined;
     scale_base_length?: number | undefined;
     scale_base_width?: number | undefined;
-    notes?: { title: string; text: string }[] | undefined;
+    notes?:
+      | { title: string; text: string; reference_id?: string | undefined }[]
+      | undefined;
     source_url?: string | undefined;
   },
   refs: IngredientRefs = NO_REFS
@@ -1337,7 +1351,29 @@ export function recipePatch(
     patch.recipeInstructions = fields.instructions.map((step) =>
       typeof step === 'string'
         ? { title: '', text: step }
-        : { title: step.title ?? '', text: step.text }
+        : {
+            title: step.title ?? '',
+            text: step.text,
+            ...(step.id === undefined ? {} : { id: step.id }),
+            ...(step.summary === undefined ? {} : { summary: step.summary }),
+            ...(step.ingredient_references === undefined
+              ? {}
+              : {
+                  ingredientReferences: step.ingredient_references.map(
+                    (ref) => ({ referenceId: ref.reference_id })
+                  ),
+                }),
+            ...(step.note_references === undefined
+              ? {}
+              : {
+                  noteReferences: step.note_references.map((ref) => ({
+                    referenceId: ref.reference_id,
+                  })),
+                }),
+            ...(step.duration_seconds === undefined
+              ? {}
+              : { durationSeconds: step.duration_seconds }),
+          }
     );
   }
   // Tags, categories and tools are deliberately absent here — they are objects that
@@ -1357,7 +1393,11 @@ export function recipePatch(
     patch.recipeScaleBaseLength = fields.scale_base_length;
   if (fields.scale_base_width !== undefined)
     patch.recipeScaleBaseWidth = fields.scale_base_width;
-  if (fields.notes !== undefined) patch.notes = fields.notes;
+  if (fields.notes !== undefined)
+    patch.notes = fields.notes.map(({ reference_id, ...note }) => ({
+      ...note,
+      ...(reference_id === undefined ? {} : { referenceId: reference_id }),
+    }));
   if (fields.source_url !== undefined) patch.orgURL = fields.source_url;
   return patch;
 }
@@ -1380,6 +1420,9 @@ function structuredLine(
     food: line.food === undefined ? null : refFor(refs.foods, line.food),
     note: line.note ?? '',
     ...(line.title === undefined ? {} : { title: line.title }),
+    ...(line.reference_id === undefined
+      ? {}
+      : { referenceId: line.reference_id }),
     ...(line.original_text === undefined
       ? {}
       : { originalText: line.original_text }),

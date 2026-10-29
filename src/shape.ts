@@ -232,13 +232,26 @@ function instruction(value: unknown): Record<string, unknown> {
   return defined({
     id: ident(object.id),
     title: cap(object.title, NAME_MAX),
+    summary: cap(object.summary, TEXT_MAX),
     text: cap(object.text, TEXT_MAX),
+    ingredientReferences: Array.isArray(object.ingredientReferences)
+      ? object.ingredientReferences.map((reference) =>
+          defined({ referenceId: ident(rec(reference).referenceId) })
+        )
+      : undefined,
+    noteReferences: Array.isArray(object.noteReferences)
+      ? object.noteReferences.map((reference) =>
+          defined({ referenceId: ident(rec(reference).referenceId) })
+        )
+      : undefined,
+    durationSeconds: num(object.durationSeconds),
   });
 }
 
 function note(value: unknown): Record<string, unknown> {
   const object = rec(value);
   return defined({
+    referenceId: ident(object.referenceId),
     title: cap(object.title, NAME_MAX),
     text: cap(object.text, TEXT_MAX),
   });
