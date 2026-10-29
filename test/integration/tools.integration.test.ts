@@ -419,6 +419,45 @@ describe('ingredients in structured form', () => {
 });
 
 describe('meal plans', () => {
+  it('persists meal-plan scale through create, update, list and a slot change', async () => {
+    const created = parse<{ id: number; recipeScale: number }>(
+      await asking.call('create_mealplan_entry', {
+        date: '2026-08-22',
+        entry_type: 'dinner',
+        recipe: slug,
+        recipe_scale: 2,
+      })
+    );
+    try {
+      expect(created.recipeScale).toBe(2);
+      const updated = parse<{ recipeScale: number }>(
+        await asking.call('update_mealplan_entry', {
+          entry_id: created.id,
+          recipe_scale: 0.5,
+        })
+      );
+      expect(updated.recipeScale).toBe(0.5);
+      const moved = parse<{ recipeScale: number; entryType: string }>(
+        await asking.call('update_mealplan_entry', {
+          entry_id: created.id,
+          entry_type: 'lunch',
+        })
+      );
+      expect(moved).toMatchObject({ recipeScale: 0.5, entryType: 'lunch' });
+      const listed = parse<{ entries: { id: number; recipeScale: number }[] }>(
+        await asking.call('list_mealplans', {
+          start_date: '2026-08-22',
+          end_date: '2026-08-22',
+        })
+      );
+      expect(listed.entries).toContainEqual(
+        expect.objectContaining({ id: created.id, recipeScale: 0.5 })
+      );
+    } finally {
+      await asking.call('delete_mealplan_entry', { entry_id: created.id });
+    }
+  });
+
   it('plans a recipe and a bare title, and refuses the ambiguous cases', async () => {
     entryId = parse<{ id: string }>(
       await asking.call('create_mealplan_entry', {

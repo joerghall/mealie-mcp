@@ -406,7 +406,8 @@ structure the lines of a recipe, use `parse_recipe_ingredients`.
 ### list_mealplans
 
 Lists the meal plan of the household in a date range. Each entry is either a
-recipe reference or a free-text note.
+recipe reference or a free-text note. Responses include `recipeScale` when Mealie
+provides it. This is a quantity multiplier, not a serving count.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -435,6 +436,7 @@ recipe or a title, not both — Mealie stores a plan entry as one or the other.
 | `date` | string | yes | Day of the meal, `YYYY-MM-DD` |
 | `entry_type` | enum | yes | `breakfast` \| `lunch` \| `dinner` \| `side` \| `snack` \| `drink` \| `dessert` |
 | `recipe` | string | no* | Recipe slug or UUID to plan |
+| `recipe_scale` | number | no | Positive recipe quantity multiplier; 1 is original, 2 doubles it, 0.5 halves it. Defaults to 1 in Mealie; requires Mealie 3.29+ |
 | `title` | string | no* | Free-text entry, for a meal that is not a stored recipe |
 | `text` | string | no | Additional note shown under the title |
 
@@ -454,7 +456,8 @@ configured in the household.
 
 Moves an entry to another day or slot, or replaces the recipe behind it. The
 current entry is read first and the changes merged onto it, because Mealie's
-route is a full-object `PUT`.
+route is a full-object `PUT`. Omitted scale is preserved, including when moving
+the entry or changing its recipe. Scale-only updates do not require confirmation.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -462,6 +465,7 @@ route is a full-object `PUT`.
 | `date` | string | no | New day, `YYYY-MM-DD` |
 | `entry_type` | enum | no | New slot |
 | `recipe` | string | no | Recipe slug or UUID |
+| `recipe_scale` | number | no | Positive recipe quantity multiplier, returned as `recipeScale`; requires Mealie 3.29+ |
 | `title` | string | no | New title |
 | `text` | string | no | New note |
 

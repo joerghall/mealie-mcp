@@ -398,6 +398,7 @@ export function mealplanEntry(value: unknown): Record<string, unknown> {
     title: cap(object.title, NAME_MAX),
     text: cap(object.text, DESCRIPTION_MAX),
     recipeId: ident(object.recipeId),
+    recipeScale: num(object.recipeScale),
     recipeSlug: ident(recipe.slug),
     recipeName: cap(recipe.name, NAME_MAX),
   });

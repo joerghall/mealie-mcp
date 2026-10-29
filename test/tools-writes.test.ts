@@ -176,6 +176,20 @@ describe('food and unit writes', () => {
 });
 
 describe('meal plan writes', () => {
+  it.each(['list_mealplans', 'get_todays_meals'])(
+    'returns recipe scale through %s',
+    async (tool) => {
+      const entry = { id: 7, recipeScale: 0.5 };
+      mockFetch(tool === 'list_mealplans' ? { items: [entry] } : [[entry]]);
+      const { text, isError } = await callText(await connect(), tool);
+      expect(isError).toBe(false);
+      const result = JSON.parse(text.slice(text.indexOf('{')));
+      expect(tool === 'list_mealplans' ? result.entries : result.meals).toEqual(
+        [entry]
+      );
+    }
+  );
+
   it('stores a free-text entry without a recipe id', async () => {
     const spy = mockFetch();
     await callText(await connect(), 'create_mealplan_entry', {
@@ -203,6 +217,80 @@ describe('meal plan writes', () => {
     expect(calls[0]!.url).toContain('/api/recipes/quark-bowl');
     expect(calls[1]!.body).toMatchObject({ recipeId: GENERIC.id, title: '' });
   });
+
+  it('creates a recipe entry with a fractional quantity multiplier', async () => {
+    const spy = mockFetch([GENERIC, { id: 7, recipeScale: 0.5 }]);
+    const { text, isError } = await callText(
+      await connect(),
+      'create_mealplan_entry',
+      {
+        date: '2026-08-19',
+        entry_type: 'dinner',
+        recipe: 'quark-bowl',
+        recipe_scale: 0.5,
+      }
+    );
+    expect(isError).toBe(false);
+    expect(callsOf(spy)[1]!.body).toMatchObject({
+      recipeId: GENERIC.id,
+      recipeScale: 0.5,
+    });
+    expect(JSON.parse(text.slice(text.indexOf('{')))).toMatchObject({
+      recipeScale: 0.5,
+    });
+  });
+
+  it('changes only the scale without confirmation or blanking other entry fields', async () => {
+    const current = {
+      id: 7,
+      date: '2026-08-19',
+      entryType: 'dinner',
+      recipeId: GENERIC.id,
+      title: 'Keep title',
+      text: 'Keep note',
+      recipeScale: 2,
+    };
+    const spy = mockFetch([current, { ...current, recipeScale: 0.5 }]);
+    const { text, isError } = await callText(
+      await connect(),
+      'update_mealplan_entry',
+      {
+        entry_id: 7,
+        recipe_scale: 0.5,
+      }
+    );
+    expect(isError).toBe(false);
+    expect(callsOf(spy)).toHaveLength(2);
+    expect(callsOf(spy)[1]).toMatchObject({
+      method: 'PUT',
+      body: { ...current, recipeScale: 0.5 },
+    });
+    expect(JSON.parse(text.slice(text.indexOf('{')))).toMatchObject({
+      recipeScale: 0.5,
+    });
+  });
+
+  it.each([0, -1, null, '2'])(
+    'rejects invalid meal-plan scale %j before any API request',
+    async (scale) => {
+      const spy = mockFetch();
+      const client = await connect();
+      for (const [name, args] of [
+        [
+          'create_mealplan_entry',
+          { date: '2026-08-19', entry_type: 'dinner', recipe: 'quark-bowl' },
+        ],
+        ['update_mealplan_entry', { entry_id: 7 }],
+      ] as const) {
+        expect(
+          (await callText(client, name, { ...args, recipe_scale: scale }))
+            .isError
+        ).toBe(true);
+      }
+      expect(spy).not.toHaveBeenCalled();
+      await client.close();
+    }
+  );
 
   it('asks Mealie to pick a random meal', async () => {
     const spy = mockFetch();

@@ -392,6 +392,7 @@ describe('mealplanEntry', () => {
         title: '',
         text: '',
         recipeId: 'r',
+        recipeScale: 2.5,
         recipe: { slug: 'quark-bowl', name: 'Quark Bowl' },
         groupId: 'g',
         userId: 'u',
@@ -401,6 +402,7 @@ describe('mealplanEntry', () => {
       date: '2026-08-19',
       entryType: 'dinner',
       recipeId: 'r',
+      recipeScale: 2.5,
       recipeSlug: 'quark-bowl',
       recipeName: 'Quark Bowl',
     });

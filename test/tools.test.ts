@@ -967,6 +967,7 @@ describe('write tools', () => {
       entryType: 'dinner',
       title: 'Kept',
       text: 'Kept too',
+      recipeScale: 2.5,
       recipeId: '592cf12b-700c-4e4b-ba98-4ea114ee1e5a',
     };
     const spy = mockFetch([current, { ...current, entryType: 'breakfast' }]);

@@ -44,6 +44,16 @@ const entryIdParam = z
   .positive()
   .describe('Plan entry id from list_mealplans — an integer, not a UUID');
 
+/** A multiplier of the recipe's original quantities, not a serving count. */
+const recipeScaleParam = z
+  .number()
+  .positive()
+  .optional()
+  .describe(
+    'Recipe quantity multiplier: 1 keeps the original, 2 doubles it, 0.5 halves it. ' +
+      'Mealie defaults to 1 for new entries. Requires Mealie 3.29+.'
+  );
+
 export function registerMealplanReadTools(
   server: McpServer,
   api: MealieApi
@@ -132,10 +142,11 @@ export function registerMealplanWriteTools(
       description:
         'Puts a recipe or a free-text note on the meal plan for one day. Give ' +
         'either a recipe or a title, not both — Mealie stores a plan entry as one ' +
-        'or the other.',
+        'or the other. recipe_scale sets the planned recipe quantity multiplier.',
       inputSchema: z.object({
         date: dateParam.describe('Day of the meal, YYYY-MM-DD'),
         entry_type: entryTypeParam,
+        recipe_scale: recipeScaleParam,
         recipe: recipeRefParam
           .optional()
           .describe('Recipe slug or UUID to plan'),
@@ -155,7 +166,7 @@ export function registerMealplanWriteTools(
       annotations: WRITE,
       outputSchema: marked(),
     },
-    async ({ date, entry_type, recipe, title, text }) =>
+    async ({ date, entry_type, recipe_scale, recipe, title, text }) =>
       run(async () => {
         if ((recipe === undefined) === (title === undefined)) {
           throw new ToolInputError(
@@ -169,6 +180,7 @@ export function registerMealplanWriteTools(
         const data = await api.post('/api/households/mealplans', {
           date,
           entryType: entry_type,
+          ...(recipe_scale === undefined ? {} : { recipeScale: recipe_scale }),
           title: title ?? '',
           text: text ?? '',
           ...(recipeId === undefined ? {} : { recipeId }),
@@ -209,11 +221,12 @@ export function registerMealplanWriteTools(
         'Moves an entry to another day or slot, or replaces the recipe behind ' +
         'it. Replacing the written title or note of an entry requires ' +
         'confirmation: call once to receive a token, then again with that ' +
-        'token. Moving the entry or swapping the recipe does not.',
+        'token. Moving the entry, swapping the recipe or changing its scale does not.',
       inputSchema: z.object({
         entry_id: entryIdParam,
         date: dateParam.optional(),
         entry_type: entryTypeParam.optional(),
+        recipe_scale: recipeScaleParam,
         recipe: recipeRefParam.optional(),
         title: z.string().trim().min(1).max(255).optional(),
         text: z.string().max(2000).optional(),
@@ -223,7 +236,16 @@ export function registerMealplanWriteTools(
       outputSchema: marked(),
     },
     async (
-      { entry_id, date, entry_type, recipe, title, text, confirm_token },
+      {
+        entry_id,
+        date,
+        entry_type,
+        recipe_scale,
+        recipe,
+        title,
+        text,
+        confirm_token,
+      },
       mcp
     ) =>
       run(async () => {
@@ -278,6 +300,7 @@ export function registerMealplanWriteTools(
           ...current,
           ...(date === undefined ? {} : { date }),
           ...(entry_type === undefined ? {} : { entryType: entry_type }),
+          ...(recipe_scale === undefined ? {} : { recipeScale: recipe_scale }),
           ...(title === undefined ? {} : { title }),
           ...(text === undefined ? {} : { text }),
           ...(recipeId === undefined ? {} : { recipeId }),
